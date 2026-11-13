@@ -1,0 +1,7 @@
+@"
+Employee,Department,Salary
+Arun,IT,35000
+Priya,HR,40000
+Rahul,Finance,45000
+Sneha,IT,38000
+"@ | Set-Content "$env:USERPROFILE\Desktop\nexus_test.csv"
