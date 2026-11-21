@@ -1,6 +1,9 @@
 
 import re
+
 from langchain_openai import ChatOpenAI
+from modules.multi_hop_retrieval import multi_hop_search
+from modules.citation_engine import build_citation_report
 
 
 SYSTEM_INSTRUCTIONS = """
@@ -27,6 +30,8 @@ STRICT GROUNDING RULES:
 
 The application displays source references separately.
 """
+
+
 def normalize_retrieval_question(question: str) -> str:
     """Remove introductory wording that can weaken semantic retrieval."""
 
@@ -49,29 +54,63 @@ def normalize_retrieval_question(question: str) -> str:
     return normalized.strip() or question.strip()
 
 
-def answer_question(
+def answer_question_with_diagnostics(
     question,
     vector_store,
     api_key,
     model_name,
     top_k=4
 ):
+    """Generate an answer, source references and retrieval diagnostics."""
 
     if not question or not question.strip():
         raise ValueError("Please enter a question.")
 
     retrieval_question = normalize_retrieval_question(question)
 
-    matches = vector_store.similarity_search(
-        retrieval_question,
-        k=top_k
+    matches, diagnostics = multi_hop_search(
+        question=retrieval_question,
+        vector_store=vector_store,
+        api_key=api_key,
+        model_name=model_name,
+        top_k=top_k,
+        fetch_k=max(top_k * 5, 20),
+        max_hops=1,
+        return_diagnostics=True
     )
 
+    # Record evidence details for diagnostics.
+    evidence_details = []
+
+    for index, doc in enumerate(matches, start=1):
+        metadata = doc.metadata or {}
+
+        evidence_details.append({
+            "number": index,
+            "source": metadata.get("source", "Unknown source"),
+            "source_type": metadata.get(
+                "source_type",
+                "uploaded_document"
+            ),
+            "page": metadata.get("page_number"),
+            "row": metadata.get("row_number"),
+            "sheet": metadata.get("sheet_name", ""),
+            "preview": (doc.page_content or "")[:260].strip()
+        })
+
+    diagnostics["evidence"] = evidence_details
+    diagnostics["unique_sources"] = len({
+        item["source"] for item in evidence_details
+    })
+
     if not matches:
+        diagnostics["evidence_sufficiency"] = "No evidence retrieved"
+
         return (
             "I couldn't find sufficient information in the indexed "
             "knowledge base.",
-            []
+            [],
+            diagnostics
         )
 
     context_parts = []
@@ -91,19 +130,14 @@ def answer_question(
         )
 
         title = metadata.get("title", "")
-
         page = metadata.get("page_number")
-
         row = metadata.get("row_number")
 
         if source_type == "web_page":
-
             source_description = (
                 f"Webpage: {title or source} | URL: {source}"
             )
-
         else:
-
             source_description = (
                 f"Uploaded document: {source}"
             )
@@ -170,7 +204,6 @@ If the evidence is insufficient, clearly state that.
     answer = response.content
 
     if isinstance(answer, list):
-
         answer = "\n".join(
             item.get("text", str(item))
             if isinstance(item, dict)
@@ -223,4 +256,49 @@ If the evidence is insufficient, clearly state that.
             "preview": doc.page_content[:260].strip()
         })
 
-    return str(answer), sources
+    # Phase 6: Claim-level citation analysis
+    citation_evidence = []
+
+    for index, doc in enumerate(matches, start=1):
+        metadata = doc.metadata or {}
+
+        citation_evidence.append({
+            "source_id": f"S{index}",
+            "source_name": metadata.get(
+                "source",
+                metadata.get("title", "Unknown source")
+            ),
+            "content": doc.page_content or ""
+        })
+
+    diagnostics["citation_report"] = build_citation_report(
+        answer=str(answer),
+        sources=citation_evidence
+    )
+
+
+    diagnostics["evidence_sufficiency"] = (
+        "Evidence retrieved; answer still requires contextual assessment"
+    )
+
+    return str(answer), sources, diagnostics
+
+
+def answer_question(
+    question,
+    vector_store,
+    api_key,
+    model_name,
+    top_k=4
+):
+    """Backward-compatible answer function returning two values."""
+
+    answer, sources, _ = answer_question_with_diagnostics(
+        question=question,
+        vector_store=vector_store,
+        api_key=api_key,
+        model_name=model_name,
+        top_k=top_k
+    )
+
+    return answer, sources

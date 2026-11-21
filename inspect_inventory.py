@@ -1,4 +1,4 @@
-﻿from collections import defaultdict
+from collections import defaultdict
 from config import CHROMA_DIR
 from modules.embeddings import create_embeddings
 from modules.vector_store import get_vector_store

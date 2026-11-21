@@ -1,8 +1,9 @@
-
+﻿
 import streamlit as st
 from pathlib import Path
 import hashlib
 import shutil
+from urllib.parse import urlparse
 
 from config import (
     OPENROUTER_API_KEY,
@@ -21,7 +22,7 @@ from modules.vector_store import (
     delete_document,
     get_document_count
 )
-from modules.rag_pipeline import answer_question
+from modules.rag_pipeline import answer_question_with_diagnostics
 from modules.web_ingestion import process_web_page
 
 from modules.vector_store import (
@@ -34,11 +35,22 @@ from modules.structured_data import (
     list_structured_sources,
     get_database_schemas,
     execute_persistent_query,
-    index_structured_file
+    index_structured_file,
+    delete_structured_source,
+    load_structured_file
 )
 from modules.nl_sql import (
     is_structured_question,
     generate_sql_from_question
+)
+from modules.research_report import (
+    build_research_report,
+    generate_markdown_report
+)
+
+from modules.report_export import (
+    generate_pdf_report,
+    generate_csv_report
 )
 
 
@@ -48,7 +60,7 @@ from modules.nl_sql import (
 
 st.set_page_config(
     page_title="NEXUS AI | Enterprise Knowledge",
-    page_icon="🧠",
+    page_icon="N",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -402,6 +414,37 @@ hr {
 }
 
 
+
+/* PHASE 8: VISUAL CONTRAST IMPROVEMENTS */
+
+.metric {
+    background: #FFFFFF !important;
+    border: 1px solid #DCE5F0 !important;
+    border-radius: 14px !important;
+    padding: 1rem !important;
+    box-shadow: 0 4px 14px rgba(20,36,59,0.06) !important;
+}
+
+.metric .muted {
+    color: #64748B !important;
+    font-size: 14px !important;
+}
+
+.metric h2 {
+    color: #2563EB !important;
+    font-size: 30px !important;
+    font-weight: 800 !important;
+}
+
+.hero h1 {
+    color: #FFFFFF !important;
+    font-size: 2.25rem !important;
+    font-weight: 800 !important;
+}
+
+.hero p {
+    color: #E2E8F0 !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -617,6 +660,37 @@ section[data-testid="stSidebar"] hr {
 }
 
 
+
+/* PHASE 8: VISUAL CONTRAST IMPROVEMENTS */
+
+.metric {
+    background: #FFFFFF !important;
+    border: 1px solid #DCE5F0 !important;
+    border-radius: 14px !important;
+    padding: 1rem !important;
+    box-shadow: 0 4px 14px rgba(20,36,59,0.06) !important;
+}
+
+.metric .muted {
+    color: #64748B !important;
+    font-size: 14px !important;
+}
+
+.metric h2 {
+    color: #2563EB !important;
+    font-size: 30px !important;
+    font-weight: 800 !important;
+}
+
+.hero h1 {
+    color: #FFFFFF !important;
+    font-size: 2.25rem !important;
+    font-weight: 800 !important;
+}
+
+.hero p {
+    color: #E2E8F0 !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -664,30 +738,9 @@ if "uploaded_names" not in st.session_state:
 
 st.markdown("""
 <div class="hero">
-    <h1>🧠 NEXUS AI</h1>
-    <p>Enterprise Knowledge Intelligence · Ask questions across your documents</p>
+    <h1>NEXUS AI</h1>
+    <p>Enterprise Knowledge Intelligence &middot; Ask questions across your documents</p>
 </div>
-""", unsafe_allow_html=True)
-import streamlit as st
-
-# Your existing imports
-# ...
-
-# --------------------------------------------------
-# PAGE CONFIGURATION
-# --------------------------------------------------
-st.set_page_config(
-    page_title="NEXUS AI 2.0",
-    layout="wide"
-)
-
-# --------------------------------------------------
-# NEXUS UI THEME CSS
-# --------------------------------------------------
-st.markdown("""
-<style>
-/* Your complete CSS from Step 2 */
-</style>
 """, unsafe_allow_html=True)
 
 
@@ -734,7 +787,7 @@ with st.sidebar:
                 border-radius:12px;
                 padding:10px;
                 font-size:23px;
-            ">✦</div>
+            ">&#10022;</div>
             <div>
                 <div style="
                     font-size:23px;
@@ -781,27 +834,25 @@ with st.sidebar:
 # SYSTEM STATUS
 # --------------------------------------------------
 
-st.markdown("### System status")
+with st.sidebar:
 
-if OPENROUTER_API_KEY and OPENROUTER_MODEL:
+    st.markdown("### System Status")
 
-    st.success("OpenRouter API configuration detected")
+    if OPENROUTER_API_KEY and OPENROUTER_MODEL:
 
-    st.caption(
-        f"Active model: {OPENROUTER_MODEL}"
-    )
+        st.success("API configuration ready")
 
-else:
+        st.caption(f"Active model: {OPENROUTER_MODEL}")
 
-    st.warning("OpenRouter API configuration missing")
+    else:
 
-    st.caption(
-        "Please configure OPENROUTER_API_KEY and OPENROUTER_MODEL in your .env file."
-    )
+        st.warning("API configuration missing")
 
-st.caption(
-    "Embeddings: all-MiniLM-L6-v2 (local)"
-)
+        st.caption(
+            "Configure OPENROUTER_API_KEY and OPENROUTER_MODEL in .env."
+        )
+
+    st.caption("Embeddings: all-MiniLM-L6-v2 (local)")
 
 
 # --------------------------------------------------
@@ -827,6 +878,15 @@ except Exception as exc:
 
 chunk_count = get_document_count(vector_store)
 
+# Vector database status in sidebar
+with st.sidebar:
+
+    st.success("Vector database connected")
+
+    st.caption(
+        f"Indexed knowledge chunks: {chunk_count:,}"
+    )
+
 
 # --------------------------------------------------
 # OVERVIEW PAGE
@@ -834,7 +894,7 @@ chunk_count = get_document_count(vector_store)
 
 if page == "Overview":
 
-    st.subheader("Workspace overview")
+    render_page_header("Workspace Overview", "Monitor your knowledge workspace and system activity.")
 
     c1, c2, c3 = st.columns(3)
 
@@ -895,7 +955,7 @@ if page == "Overview":
 
 elif page == "Knowledge Chat":
 
-    st.subheader("Knowledge Chat")
+    render_page_header("Knowledge Chat", "Ask questions across your documents, webpages and structured data.")
 
     st.write(
         "Ask questions across enterprise documents, webpages "
@@ -936,6 +996,231 @@ elif page == "Knowledge Chat":
 
                 if message.get("truncated"):
                     st.warning("Results were limited to 500 rows.")
+            
+            # Display advanced retrieval diagnostics
+            if message["role"] == "assistant":
+
+                diagnostics = message.get("diagnostics")
+
+                if diagnostics:
+
+                    with st.expander(
+                        "Retrieval Diagnostics",
+                        expanded=False
+                    ):
+
+                        st.markdown("### Retrieval Overview")
+
+                        col1, col2, col3 = st.columns(3)
+
+                        col1.metric(
+                            "Search Queries",
+                            diagnostics.get("initial", {}).get(
+                                "query_count", 0
+                            )
+                        )
+
+                        col2.metric(
+                            "Retrieval Hops",
+                            diagnostics.get("hops_completed", 0)
+                        )
+
+                        col3.metric(
+                            "Evidence Chunks",
+                            diagnostics.get("retrieved_chunks", 0)
+                        )
+
+                        st.caption(
+                            f"Strategy: {diagnostics.get('strategy', 'Not available')}"
+                        )
+
+                        st.caption(
+                            f"Unique Sources: {diagnostics.get('unique_sources', 0)}"
+                        )
+
+                        st.markdown("### Initial Search Queries")
+
+                        initial_queries = diagnostics.get(
+                            "initial", {}
+                        ).get("queries", [])
+
+                        if initial_queries:
+
+                            for index, item in enumerate(
+                                initial_queries, start=1
+                            ):
+                                st.markdown(
+                                    f"**Query {index}:** {item.get('query', '')}"
+                                )
+
+                                st.caption(
+                                    f"Retrieved chunks: {item.get('results_found', 0)}"
+                                )
+
+                        else:
+                            st.info("No initial query details available.")
+
+                        st.markdown("### Follow-up Retrieval")
+
+                        followup = diagnostics.get("followup", {})
+
+                        if followup.get("attempted"):
+
+                            st.write(
+                                f"**Follow-up query:** "
+                                f"{followup.get('query', '')}"
+                            )
+
+                            st.caption(
+                                f"Follow-up results: "
+                                f"{followup.get('results_found', 0)}"
+                            )
+
+                        else:
+                            st.info(
+                                "No follow-up retrieval was performed."
+                            )
+
+                        st.markdown("### Evidence Assessment")
+
+                        st.caption(
+                            diagnostics.get(
+                                "evidence_sufficiency",
+                                "Not assessed"
+                            )
+                        )
+
+                        evidence = diagnostics.get("evidence", [])
+
+                        if evidence:
+
+                            for item in evidence:
+
+                                st.markdown(
+                                    f"**Evidence {item['number']}: "
+                                    f"{item['source']}**"
+                                )
+
+                                location = []
+
+                                if item.get("page") is not None:
+                                    location.append(
+                                        f"Page {item['page']}"
+                                    )
+
+                                if item.get("row") is not None:
+                                    location.append(
+                                        f"Row {item['row']}"
+                                    )
+
+                                if item.get("sheet"):
+                                    location.append(
+                                        f"Sheet {item['sheet']}"
+                                    )
+
+                                if location:
+                                    st.caption(" | ".join(location))
+
+                                st.write(item.get("preview", ""))
+
+                                st.divider()
+            
+            # Phase 6: Claim-level Citation & Evidence Verification
+            if message["role"] == "assistant":
+
+                diagnostics = message.get("diagnostics") or {}
+                citation_report = diagnostics.get("citation_report", {})
+
+                if citation_report:
+                    with st.expander(
+                        "Claim & Evidence Verification",
+                        expanded=False
+                    ):
+                        st.markdown("### Citation Overview")
+
+                        col1, col2 = st.columns(2)
+
+                        col1.metric(
+                            "Total Claims",
+                            citation_report.get("total_claims", 0)
+                        )
+
+                        col2.metric(
+                            "Retrieved Sources",
+                            citation_report.get("total_sources", 0)
+                        )
+
+                        st.caption(
+                            "Evidence scores indicate lexical overlap, "
+                            "not confirmed factual accuracy."
+                        )
+
+                        for claim in citation_report.get("claims", []):
+
+                            status = claim.get(
+                                "verification_status",
+                                "unverified"
+                            )
+
+                            status_labels = {
+                                "candidate_support": "Candidate support",
+                                "insufficient_evidence": "Insufficient evidence",
+                                "unverified": "Unverified"
+                            }
+
+                            score = float(
+                                claim.get("best_evidence_score", 0)
+                            )
+
+                            score = max(0.0, min(1.0, score))
+
+                            with st.expander(
+                                f"{claim.get('claim_id', 'Claim')} | "
+                                f"{status_labels.get(status, status)}"
+                            ):
+
+                                st.write(claim.get("claim", ""))
+
+                                st.caption(
+                                    f"Evidence relevance: {score:.1%}"
+                                )
+
+                                st.progress(score)
+
+                                evidence_matches = claim.get(
+                                    "evidence_matches", []
+                                )
+
+                                if evidence_matches:
+
+                                    st.markdown("**Supporting evidence candidates**")
+
+                                    for evidence in evidence_matches:
+
+                                        st.markdown(
+                                            f"**{evidence.get('source_id', 'Source')}**"
+                                        )
+
+                                        st.write(
+                                            evidence.get("source_name", "Unknown")
+                                        )
+
+                                        st.caption(
+                                            f"Relevance: "
+                                            f"{evidence.get('relevance_score', 0):.1%}"
+                                        )
+
+                                        st.write(
+                                            evidence.get("evidence", "")
+                                        )
+
+                                        st.divider()
+
+                                else:
+                                    st.warning(
+                                        "No matching evidence was found."
+                                    )
+
 
             # Display document and webpage sources
             if message["role"] == "assistant":
@@ -980,6 +1265,94 @@ elif page == "Knowledge Chat":
                                     )
 
                             st.divider()
+    
+    # --------------------------------------------------
+    # PHASE 7: RESEARCH REPORT EXPORTS
+    # --------------------------------------------------
+
+    messages = st.session_state.get("messages", [])
+
+    assistant_index = next(
+        (
+            i for i in range(len(messages) - 1, -1, -1)
+            if messages[i].get("role") == "assistant"
+        ),
+        None
+    )
+
+    if assistant_index is not None:
+
+        latest_assistant = messages[assistant_index]
+
+        latest_question = next(
+            (
+                messages[i].get("content", "")
+                for i in range(assistant_index - 1, -1, -1)
+                if messages[i].get("role") == "user"
+            ),
+            ""
+        )
+
+        latest_answer = latest_assistant.get("content", "")
+
+        latest_sources = latest_assistant.get("sources", [])
+
+        latest_diagnostics = (
+            latest_assistant.get("diagnostics") or {}
+        )
+
+        latest_citation_report = (
+            latest_diagnostics.get("citation_report", {})
+        )
+
+        research_report = build_research_report(
+            question=latest_question,
+            answer=str(latest_answer),
+            sources=latest_sources,
+            citation_report=latest_citation_report
+        )
+
+        markdown_data = generate_markdown_report(research_report)
+
+        pdf_data = generate_pdf_report(research_report)
+
+        csv_data = generate_csv_report(research_report)
+
+        with st.expander(
+            "Download Research Report",
+            expanded=False
+        ):
+
+            st.caption(
+                "Export the latest assistant response, "
+                "its evidence analysis and available source references."
+            )
+
+            col1, col2, col3 = st.columns(3)
+
+            col1.download_button(
+                label="Download Markdown",
+                data=markdown_data,
+                file_name="nexus_research_report.md",
+                mime="text/markdown",
+                key="nexus_download_markdown"
+            )
+
+            col2.download_button(
+                label="Download PDF",
+                data=pdf_data,
+                file_name="nexus_research_report.pdf",
+                mime="application/pdf",
+                key="nexus_download_pdf"
+            )
+
+            col3.download_button(
+                label="Download CSV",
+                data=csv_data,
+                file_name="nexus_claim_evidence.csv",
+                mime="text/csv",
+                key="nexus_download_csv"
+            )
 
     # Question input
     question = st.chat_input(
@@ -1007,19 +1380,34 @@ elif page == "Knowledge Chat":
                 # Route structured-data questions to DuckDB
                 schemas = get_database_schemas(DUCKDB_PATH)
 
-                if is_structured_question(question) and schemas:
+                
+                use_structured = (
+                    is_structured_question(question) and bool(schemas)
+                )
+                result = None
 
-                    with st.spinner(
-                        "NEXUS AI is generating SQL and analysing structured data..."
-                    ):
+                if use_structured:
+                    try:
+                        with st.spinner(
+                            "NEXUS AI is generating SQL and analysing structured data..."
+                        ):
+                            result = generate_sql_from_question(
+                                question=question,
+                                database_path=DUCKDB_PATH,
+                                api_key=OPENROUTER_API_KEY,
+                                model_name=OPENROUTER_MODEL
+                            )
 
-                        result = generate_sql_from_question(
-                            question=question,
-                            database_path=DUCKDB_PATH,
-                            api_key=OPENROUTER_API_KEY,
-                            model_name=OPENROUTER_MODEL
-                        )
+                    except ValueError as exc:
+                        if (
+                            "available structured data cannot answer this question"
+                            in str(exc).lower()
+                        ):
+                            use_structured = False
+                        else:
+                            raise
 
+                if use_structured:
                     st.session_state.messages.append({
                         "role": "assistant",
                         "content": (
@@ -1032,25 +1420,31 @@ elif page == "Knowledge Chat":
                         "sources": []
                     })
 
-                # Route other questions to existing document RAG
+
+                   
+                
+                # Route other questions to document RAG
                 elif chunk_count > 0:
 
                     with st.spinner(
-                        "NEXUS AI is searching documents and generating an answer..."
+                        "NEXUS AI is performing multi-hop retrieval and generating an answer..."
                     ):
 
-                        answer, sources = answer_question(
-                            question=question,
-                            vector_store=vector_store,
-                            api_key=OPENROUTER_API_KEY,
-                            model_name=OPENROUTER_MODEL,
-                            top_k=4
+                        answer, sources, diagnostics = (
+                            answer_question_with_diagnostics(
+                                question=question,
+                                vector_store=vector_store,
+                                api_key=OPENROUTER_API_KEY,
+                                model_name=OPENROUTER_MODEL,
+                                top_k=4
+                            )
                         )
 
                     st.session_state.messages.append({
                         "role": "assistant",
                         "content": answer,
-                        "sources": sources
+                        "sources": sources,
+                        "diagnostics": diagnostics
                     })
 
                 else:
@@ -1083,7 +1477,7 @@ elif page == "Knowledge Chat":
 
 elif page == "Document Library":
 
-    st.subheader("Document library")
+    render_page_header("Document Library", "Upload, process and manage your knowledge documents.")
 
     st.write(
         "Upload PDF, Word, text and spreadsheet documents. "
@@ -1104,15 +1498,21 @@ elif page == "Document Library":
         disabled=not uploads
     ):
 
+        
         progress = st.progress(0)
         status = st.empty()
+
         successful = 0
         skipped = 0
+        failed = 0
+        partial_warnings = 0
+
+        failed_files = []
+        structured_warnings = []
 
         for index, uploaded in enumerate(uploads):
 
             safe_name = Path(uploaded.name).name
-
             file_bytes = uploaded.getvalue()
 
             digest = hashlib.sha256(
@@ -1122,12 +1522,23 @@ elif page == "Document Library":
             saved_path = UPLOAD_DIR / f"{digest}_{safe_name}"
 
             try:
-
                 saved_path.write_bytes(file_bytes)
 
                 status.write(
                     f"Processing **{safe_name}**..."
                 )
+
+                # Validate structured files BEFORE vector indexing.
+                is_structured = saved_path.suffix.lower() in [
+                    ".csv",
+                    ".xlsx"
+                ]
+
+                if is_structured:
+                    load_structured_file(
+                        file_path=saved_path,
+                        original_name=safe_name
+                    )
 
                 chunks, ids, unit_count, unit_label = process_document(
                     saved_path,
@@ -1141,29 +1552,32 @@ elif page == "Document Library":
                     source=safe_name,
                     file_id=digest
                 )
-                # Automatically index CSV and Excel files in DuckDB
+
+                # Index structured data separately so a DuckDB error
+                # does not incorrectly classify vector indexing as failed.
                 structured_result = None
+                structured_error = None
 
-                if saved_path.suffix.lower() in [".csv", ".xlsx"]:
-
-                    structured_result = index_structured_file(
-                        file_path=saved_path,
-                        original_name=safe_name,
-                        database_path=DUCKDB_PATH,
-                        file_id=digest
-                    )
+                if is_structured:
+                    try:
+                        structured_result = index_structured_file(
+                            file_path=saved_path,
+                            original_name=safe_name,
+                            database_path=DUCKDB_PATH,
+                            file_id=digest
+                        )
+                    except Exception as exc:
+                        structured_error = str(exc)
 
                 if result["status"] == "duplicate":
-
                     skipped += 1
 
                     st.info(
                         f"{safe_name}: Identical document already exists. "
-                        "Skipped duplicate upload."
+                        "Vector indexing skipped."
                     )
 
                 elif result["status"] == "replaced":
-
                     successful += 1
 
                     st.success(
@@ -1173,24 +1587,44 @@ elif page == "Document Library":
                     )
 
                 else:
-
                     successful += 1
 
                     st.success(
                         f"{safe_name}: {unit_count} {unit_label} processed, "
                         f"{result['added']} chunks indexed."
                     )
+
                 if structured_result:
                     st.success(
                         f"DuckDB indexing complete: "
                         f"{structured_result['table_count']} table(s), "
                         f"{structured_result['row_count']} rows."
-                    ) 
+                    )
+
+                if structured_error:
+                    partial_warnings += 1
+
+                    structured_warnings.append({
+                        "file": safe_name,
+                        "error": structured_error
+                    })
+
+                    st.warning(
+                        f"{safe_name}: Vector indexing completed, "
+                        "but structured-data indexing failed. "
+                        "Check the warning details below."
+                    )
 
                 if safe_name not in st.session_state.uploaded_names:
                     st.session_state.uploaded_names.append(safe_name)
 
             except Exception as exc:
+                failed += 1
+
+                failed_files.append({
+                    "file": safe_name,
+                    "error": str(exc)
+                })
 
                 st.error(
                     f"{safe_name}: {exc}"
@@ -1200,17 +1634,53 @@ elif page == "Document Library":
                 (index + 1) / len(uploads)
             )
 
-        status.write(
-            f"Finished. {successful} indexed or updated, "
-            f"{skipped} duplicate(s) skipped."
+        status.write("Document processing completed.")
+
+        summary_col1, summary_col2, summary_col3, summary_col4 = (
+            st.columns(4)
         )
-        
+
+        summary_col1.metric("Indexed / Updated", successful)
+        summary_col2.metric("Duplicates Skipped", skipped)
+        summary_col3.metric("Partial DB Warnings", partial_warnings)
+        summary_col4.metric("Failed Files", failed)
+
+        if successful > 0:
+            st.success(
+                f"Successfully indexed or updated {successful} file(s)."
+            )
+
+        if skipped > 0:
+            st.info(
+                f"{skipped} duplicate file(s) were skipped in vector indexing."
+            )
+
+        if partial_warnings > 0:
+            st.warning(
+                f"{partial_warnings} file(s) have incomplete structured-data indexing."
+            )
+
+            with st.expander("View structured-data warnings"):
+                for warning in structured_warnings:
+                    st.markdown(f"**{warning['file']}**")
+                    st.caption(warning["error"])
+
+        if failed > 0:
+            st.warning(
+                f"{failed} file(s) could not be processed."
+            )
+
+            with st.expander("View failed files and error details"):
+                for failure in failed_files:
+                    st.markdown(f"**{failure['file']}**")
+                    st.caption(failure["error"])
 
         st.rerun()
 
+
     st.divider()
 
-    st.subheader("Indexed documents")
+    render_page_header("Indexed Documents", "Inspect and manage documents stored in your knowledge base.")
 
     documents = get_all_documents(vector_store)
 
@@ -1224,6 +1694,7 @@ elif page == "Document Library":
         get_document_count(vector_store)
     )
 
+    
     if documents:
 
         for document in documents:
@@ -1250,16 +1721,72 @@ elif page == "Document Library":
                     key=f"delete_{document['source']}"
                 ):
 
-                    removed = delete_document(
-                        vector_store,
-                        document["source"]
+                    st.session_state[
+                        f"confirm_delete_{document['file_id']}"
+                    ] = True
+
+                if st.session_state.get(
+                    f"confirm_delete_{document['file_id']}",
+                    False
+                ):
+
+                    st.warning(
+                        f"Are you sure you want to delete {document['source']}? "
+                        "This removes its indexed knowledge chunks and "
+                        "any associated structured-data tables."
                     )
 
-                    st.success(
-                        f"Deleted {removed} indexed chunks."
-                    )
+                    confirm_col, cancel_col = st.columns(2)
 
-                    st.rerun()
+                    with confirm_col:
+
+                        if st.button(
+                            "Confirm deletion",
+                            key=f"confirm_yes_{document['file_id']}",
+                            type="primary"
+                        ):
+
+                            try:
+                                # Remove associated DuckDB tables first.
+                                structured_tables_removed = delete_structured_source(
+                                    DUCKDB_PATH,
+                                    document["source"]
+                                )
+
+                                # Remove document chunks from Chroma.
+                                removed = delete_document(
+                                    vector_store,
+                                    document["source"]
+                                )
+
+                                st.session_state[
+                                    f"confirm_delete_{document['file_id']}"
+                                ] = False
+
+                                st.success(
+                                    f"Deleted {removed} vector chunks and "
+                                    f"{structured_tables_removed} DuckDB tables."
+                                )
+
+                                st.rerun()
+
+                            except Exception as exc:
+                                st.error(
+                                    f"Document deletion failed: {exc}"
+                                )
+
+                    with cancel_col:
+
+                        if st.button(
+                            "Cancel",
+                            key=f"confirm_no_{document['file_id']}"
+                        ):
+
+                            st.session_state[
+                                f"confirm_delete_{document['file_id']}"
+                            ] = False
+
+                            st.rerun()
 
     else:
 
@@ -1271,7 +1798,7 @@ elif page == "Document Library":
 
 elif page == "Web Sources":
 
-    st.subheader("Web Sources")
+    render_page_header("Web Sources", "Ingest and manage knowledge from web pages.")
 
     st.write(
         "Connect public websites to your NEXUS AI knowledge base. "
@@ -1293,11 +1820,30 @@ elif page == "Web Sources":
         placeholder="https://example.com/about",
         help="Enter the complete public webpage URL, including https://"
     )
+    website_url_valid = False
+
+    if website_url.strip():
+
+        parsed_url = urlparse(website_url.strip())
+
+        website_url_valid = (
+            parsed_url.scheme in ("http", "https")
+            and bool(parsed_url.netloc)
+            and "." in parsed_url.netloc
+        )
+
+        if website_url_valid:
+            st.caption("URL format looks valid.")
+        else:
+            st.warning(
+                "Enter a valid public HTTP/HTTPS URL, "
+                "for example https://example.com/about"
+            )
 
     if st.button(
         "Fetch and index webpage",
         type="primary",
-        disabled=not website_url.strip()
+        disabled=not website_url_valid
     ):
 
         try:
@@ -1454,24 +2000,67 @@ elif page == "Web Sources":
 
                 if delete_clicked:
 
-                    try:
+                    st.session_state[
+                        f"confirm_delete_web_{index}"
+                    ] = True
 
-                        removed = delete_web_source(
-                            vector_store,
-                            source["source"]
-                        )
+                if st.session_state.get(
+                    f"confirm_delete_web_{index}",
+                    False
+                ):
 
-                        st.success(
-                            f"Deleted webpage and {removed} indexed chunks."
-                        )
+                    st.warning(
+                        f"Are you sure you want to delete "
+                        f"{source['url']}? This removes its indexed "
+                        "knowledge chunks."
+                    )
 
-                        st.rerun()
+                    confirm_col, cancel_col = st.columns(2)
 
-                    except Exception as exc:
+                    with confirm_col:
 
-                        st.error(
-                            f"Unable to delete webpage: {exc}"
-                        )
+                        if st.button(
+                            "Confirm deletion",
+                            key=f"confirm_delete_web_yes_{index}",
+                            type="primary"
+                        ):
+
+                            try:
+
+                                removed = delete_web_source(
+                                    vector_store,
+                                    source["source"]
+                                )
+
+                                st.session_state[
+                                    f"confirm_delete_web_{index}"
+                                ] = False
+
+                                st.success(
+                                    f"Deleted webpage and "
+                                    f"{removed} indexed chunks."
+                                )
+
+                                st.rerun()
+
+                            except Exception as exc:
+
+                                st.error(
+                                    f"Unable to delete webpage: {exc}"
+                                )
+
+                    with cancel_col:
+
+                        if st.button(
+                            "Cancel",
+                            key=f"confirm_delete_web_no_{index}"
+                        ):
+
+                            st.session_state[
+                                f"confirm_delete_web_{index}"
+                            ] = False
+
+                            st.rerun()
 
     else:
 
@@ -1485,7 +2074,7 @@ elif page == "Web Sources":
 
 elif page == "Structured Data":
 
-    st.subheader("Structured Data Analytics")
+    render_page_header("Structured Data Analytics", "Query and explore your structured business data.")
 
     st.write(
         "Explore indexed CSV and Excel files, inspect worksheet schemas, "
@@ -1813,5 +2402,161 @@ elif page == "Structured Data":
                     "This result does not contain both a category "
                     "and numeric column for a basic bar chart."
                 )
+        
 
 
+
+
+# --------------------------------------------------
+# EVALUATION PAGE
+# --------------------------------------------------
+
+elif page == "Evaluation":
+
+    render_page_header(
+        "RAG Evaluation",
+        "Measure answer grounding against expected keywords and phrases."
+    )
+
+    st.write(
+        "Evaluate whether an AI-generated answer contains the expected "
+        "information. This is a transparent keyword-based smoke test, "
+        "not a formal semantic or RAGAS evaluation."
+    )
+
+    st.divider()
+
+    st.markdown("### Evaluation Workspace")
+
+    answer_text = st.text_area(
+        "AI-generated answer",
+        placeholder="Paste the answer you want to evaluate...",
+        height=220,
+        key="nexus_eval_answer"
+    )
+
+    expected_terms_text = st.text_area(
+        "Expected keywords or phrases",
+        placeholder="Enter one expected term per line, for example:\n"
+                    "machine learning\n"
+                    "vector database\n"
+                    "retrieval augmented generation",
+        height=150,
+        key="nexus_eval_expected_terms"
+    )
+
+    if st.button(
+        "Run Evaluation",
+        type="primary",
+        key="nexus_run_evaluation"
+    ):
+
+        if not answer_text.strip():
+
+            st.warning("Please enter an AI-generated answer.")
+
+        elif not expected_terms_text.strip():
+
+            st.warning("Please enter at least one expected keyword or phrase.")
+
+        else:
+
+            expected_terms = [
+                term.strip()
+                for term in expected_terms_text.splitlines()
+                if term.strip()
+            ]
+
+            try:
+
+                result = simple_grounding_check(
+                    answer=answer_text,
+                    expected_terms=expected_terms
+                )
+
+                st.session_state["nexus_eval_result"] = result
+
+            except Exception as exc:
+
+                st.error(f"Evaluation failed: {exc}")
+                st.session_state.pop("nexus_eval_result", None)
+
+    result = st.session_state.get("nexus_eval_result")
+
+    if result:
+
+        st.divider()
+
+        st.markdown("### Evaluation Results")
+
+        score = result["score"]
+
+        if score is not None:
+
+            metric1, metric2, metric3 = st.columns(3)
+
+            with metric1:
+                st.metric(
+                    "Grounding score",
+                    f"{score * 100:.1f}%"
+                )
+
+            with metric2:
+                st.metric(
+                    "Matched terms",
+                    len(result["matched"])
+                )
+
+            with metric3:
+                st.metric(
+                    "Missing terms",
+                    len(result["missing"])
+                )
+
+            st.progress(score)
+
+            if score == 1:
+
+                st.success("All expected terms were found in the answer.")
+
+            elif score >= 0.5:
+
+                st.warning(
+                    "Some expected terms were found, but the answer "
+                    "is missing information."
+                )
+
+            else:
+
+                st.error(
+                    "Low keyword coverage. Most expected terms "
+                    "were not found."
+                )
+
+            result_col1, result_col2 = st.columns(2)
+
+            with result_col1:
+
+                st.markdown("#### Matched terms")
+
+                if result["matched"]:
+                    for term in result["matched"]:
+                        st.success(term)
+                else:
+                    st.info("No expected terms matched.")
+
+            with result_col2:
+
+                st.markdown("#### Missing terms")
+
+                if result["missing"]:
+                    for term in result["missing"]:
+                        st.error(term)
+                else:
+                    st.success("No missing terms.")
+
+            st.caption(
+                "Score = matched expected terms / total expected terms. "
+                "This measures literal keyword presence only; it does not "
+                "verify factual correctness or semantic relevance."
+            )

@@ -69,9 +69,21 @@ def ensure_registry(connection):
     """)
 
 
+
 def clean_dataframe(dataframe: pd.DataFrame) -> pd.DataFrame:
     """Normalize column names and remove entirely empty rows."""
+
     dataframe = dataframe.copy()
+
+    # Normalize empty strings and whitespace-only cells to NaN.
+    dataframe = dataframe.replace(r"^\s*$", pd.NA, regex=True)
+
+    # Remove completely empty rows.
+    dataframe = dataframe.dropna(how="all")
+
+    # Reject files with no usable data.
+    if dataframe.empty:
+        return pd.DataFrame()
 
     cleaned_columns = []
     used_names = set()
@@ -93,7 +105,6 @@ def clean_dataframe(dataframe: pd.DataFrame) -> pd.DataFrame:
         cleaned_columns.append(name)
 
     dataframe.columns = cleaned_columns
-    dataframe = dataframe.dropna(how="all")
     dataframe = dataframe.reset_index(drop=True)
 
     return dataframe

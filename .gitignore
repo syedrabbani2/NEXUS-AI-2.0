@@ -7,3 +7,18 @@ chroma_db/
 uploads/
 *.db
 .DS_Store
+# Runtime databases and generated data
+data/nexus_analytics.duckdb
+data/nexus_analytics.duckdb.wal
+*.duckdb
+*.duckdb.wal
+
+# Test and coverage artifacts
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+
+# Historical development snapshots
+modules/rag_pipeline_before_*.py
