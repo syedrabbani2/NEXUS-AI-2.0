@@ -1,104 +1,203 @@
-# NEXUS AI — Enterprise Knowledge Intelligence
+# NEXUS AI 2.0 — Enterprise Knowledge Intelligence
 
-A beginner-friendly Retrieval-Augmented Generation (RAG) capstone MVP.
+An enterprise-oriented Retrieval-Augmented Generation (RAG) application built with Python, Streamlit, LangChain, ChromaDB, DuckDB and OpenRouter.
 
-## Features
-- Upload multiple text-based PDF files.
-- Extract PDF text and split it into overlapping chunks.
-- Generate embeddings locally with Sentence Transformers.
-- Store and retrieve chunks using a persistent local ChromaDB collection.
-- Use a Gemini model through LangChain to answer questions from retrieved context.
-- Display source file names and page references.
-- Includes a basic keyword smoke-test page.
+NEXUS AI combines unstructured documents, structured business data and web content in one knowledge workspace.
+
+## Key Features
+
+### Document Intelligence
+- Upload PDF, DOCX, TXT, CSV and XLSX files.
+- Extract, clean and process content.
+- Generate local embeddings using Sentence Transformers.
+- Store document vectors in ChromaDB.
+- Manage indexed documents.
+
+### RAG Knowledge Chat
+- Ask questions across indexed knowledge sources.
+- Generate answers using OpenRouter through LangChain ChatOpenAI.
+- Retrieve relevant chunks and provide source references.
+- Inspect retrieval diagnostics and supporting evidence.
+
+### Advanced Retrieval
+- Semantic vector search.
+- BM25 keyword retrieval.
+- Reciprocal Rank Fusion (RRF).
+- Multi-query retrieval.
+- Multi-hop retrieval.
+
+### Structured Data Intelligence
+- Import CSV and Excel datasets.
+- Clean data using Pandas.
+- Persist structured data in DuckDB.
+- Generate and execute natural-language-assisted SQL queries.
+- Validate SQL and restrict execution to registered tables and read-only operations.
+
+### Web Knowledge Ingestion
+- Ingest supported webpages.
+- Extract and index webpage content.
+- Manage indexed web sources.
+
+### Research and Reporting
+- Generate research reports using retrieved evidence.
+- Export reports in Markdown, PDF and CSV formats.
+
+### Evaluation
+- Inspect retrieval results and supporting evidence.
+- Run expected-keyword coverage checks.
+- Automated tests for core application modules.
+
+## Technology Stack
+
+| Layer | Technology |
+|---|---|
+| Application | Python, Streamlit |
+| LLM | OpenRouter, LangChain ChatOpenAI |
+| RAG | LangChain |
+| Embeddings | Sentence Transformers |
+| Vector database | ChromaDB |
+| Retrieval | Semantic search, BM25, RRF |
+| Structured database | DuckDB |
+| Data processing | Pandas, OpenPyXL |
+| SQL validation | SQLGlot |
+| Document processing | PyPDF, python-docx |
+| Web ingestion | Requests, BeautifulSoup |
+| Reporting | ReportLab |
+| Testing | Pytest |
 
 ## Architecture
-PDF → PyPDFLoader → Text Splitter → Sentence Transformers Embeddings → ChromaDB
-→ Similarity Search → Gemini LLM → Answer + Source References
+
+```text
+Documents / Structured Data / Web Sources
+                  |
+          Processing & Cleaning
+                  |
+        +---------+----------+
+        |                    |
+   Local Embeddings       DuckDB
+        |
+     ChromaDB
+        |
+   BM25 + Hybrid Retrieval
+        |
+ Multi-Query / Multi-Hop Retrieval
+        |
+   Retrieved Evidence
+        |
+    OpenRouter LLM
+        |
+   Answers + Sources
+        |
+   Streamlit Interface
+```
 
 ## Requirements
-- Windows 10/11
-- Python 3.11 recommended
-- Internet connection for package installation, first embedding-model download and Gemini API calls
-- Google AI Studio API key (free tier availability and quotas depend on the account/model)
 
-## Windows 11 setup
+- Windows 10/11 or compatible Python environment.
+- Python 3.14.10 is the development version currently tested.
+- Internet access for package installation, initial embedding-model download and OpenRouter API requests.
+- OpenRouter API key and an available model identifier.
 
-### 1. Install Python
-Install Python 3.11 from https://www.python.org/downloads/ .
-During installation, tick **Add Python to PATH**.
+## Installation — Windows
 
-Open Command Prompt and verify:
-```bat
-py --version
-```
+### 1. Create a virtual environment
 
-### 2. Open the project folder
-Extract the ZIP. In File Explorer, open the `NEXUS-AI` folder.
-Click the address bar, type `cmd`, and press Enter.
-
-### 3. Create and activate a virtual environment
-```bat
-py -3.11 -m venv .venv
-.venv\Scripts\activate
-```
-If PowerShell is used instead of Command Prompt:
 ```powershell
-.venv\Scripts\Activate.ps1
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 ```
-If PowerShell blocks activation, use Command Prompt or follow Microsoft's execution-policy guidance. Do not change system-wide security settings just for this project.
 
-### 4. Install dependencies
-```bat
+### 2. Install dependencies
+
+```powershell
 python -m pip install --upgrade pip
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 ```
-The first installation can take several minutes because the local embedding model dependencies are sizeable.
 
-### 5. Create a Gemini API key
-1. Visit https://aistudio.google.com/
-2. Sign in and create an API key.
-3. Copy `.env.example` and rename the copy to `.env`.
-4. Open `.env` in Notepad and replace `PASTE_YOUR_API_KEY_HERE` with your key.
-5. Save the file.
+### 3. Configure OpenRouter
 
-Never share your API key or commit `.env` to GitHub. Check Google's current free-tier model availability and rate limits in AI Studio before selecting a model. If the configured model is unavailable to your account, change `GEMINI_MODEL` in `.env` to a currently available Flash model.
+Create `.env` in the project root using `.env.example` as a template.
 
-### 6. Start NEXUS AI
-```bat
+```env
+OPENROUTER_API_KEY=YOUR_OPENROUTER_API_KEY
+OPENROUTER_MODEL=YOUR_OPENROUTER_MODEL_ID
+```
+
+Keep the actual key private. Never commit `.env` to Git.
+
+### 4. Run NEXUS AI
+
+```powershell
 streamlit run app.py
 ```
-The browser should open automatically. If it does not, open the local URL printed in Command Prompt (usually http://localhost:8501).
 
-## First demo
-1. Open **Document Library**.
-2. Upload `data/sample_documents/sample_hr_policy.pdf`.
-3. Click **Process and index documents**.
-4. Open **Knowledge Chat**.
-5. Ask: `How many casual leave days are provided each year?`
-6. Ask: `How much notice must an employee give before resignation?`
-7. Expand **View source references** and check the file and page.
-8. Ask: `What is the company's international relocation allowance?` The sample policy does not specify one; the assistant should say it cannot find sufficient information.
+Open the local URL displayed in the terminal, usually:
 
-## Troubleshooting
-- **`py` is not recognized:** reinstall Python and tick Add Python to PATH, then reopen Command Prompt.
-- **`ModuleNotFoundError`:** activate `.venv` and run `pip install -r requirements.txt`.
-- **Gemini authentication/model error:** verify `.env`, API key, model ID and AI Studio availability. Restart Streamlit after changing `.env`.
-- **429 / quota error:** you may have reached a free-tier rate limit. Wait and retry later; do not repeatedly submit the same request.
-- **No text extracted:** the PDF may be scanned. This MVP does not include OCR; use a text-selectable PDF.
-- **First run is slow:** Sentence Transformers downloads its model once and caches it locally.
-- **Port is busy:** run `streamlit run app.py --server.port 8502`.
+`http://localhost:8501`
 
-## Evaluation limitation
-The Evaluation page performs a simple expected-keyword coverage check. It is NOT RAGAS Faithfulness, Answer Relevance, DeepEval, or a formal benchmark. The assignment's full acceptance criteria require a larger, carefully labelled evaluation set and formal metrics.
+## Application Pages
 
-## Privacy and API usage
-- PDFs are stored in the local project folder.
-- Text from retrieved chunks is sent to the Gemini API when you ask a question.
-- Do not upload confidential employer, customer, student, employee, medical, financial or other sensitive records.
-- Google's free-tier terms, model availability, rate limits and data-use rules can change. Review them before using the API.
+- Workspace Overview
+- Knowledge Chat
+- Document Library
+- Indexed Documents
+- Web Sources
+- Structured Data Analytics
+- Evaluation
 
-## GitHub
-Before pushing:
-1. Confirm `.env` is ignored by `.gitignore`.
-2. Never paste your key into source code, screenshots, README or commits.
-3. Run `git status` and inspect files before committing.
+## Running Tests
+
+Run the complete test suite:
+
+```powershell
+python -m pytest .\tests -v
+```
+
+Run with coverage:
+
+```powershell
+python -m pytest .\tests --cov=modules --cov-report=term-missing
+```
+
+### Development test baseline
+
+The project previously achieved:
+- 185 passing automated tests.
+- 81% coverage across the `modules` package.
+
+These are development results, not a guarantee of production readiness. Rerun tests after changes.
+
+## Data Storage
+
+- `chroma_db/` — persistent vector database.
+- `uploads/` — uploaded documents.
+- `data/` — structured database and sample data.
+
+Back up these directories before moving or cleaning the project.
+
+## Security Considerations
+
+- Store credentials in `.env` or supported Streamlit secrets.
+- Never commit API keys.
+- SQL execution uses read-only validation and registered-table restrictions.
+- Treat retrieved document and webpage content as untrusted input.
+- Do not send confidential employer, customer, student, employee, medical or financial information to an external LLM without appropriate authorization.
+- Review OpenRouter and model-provider data policies before sending sensitive content.
+
+## Known Limitations
+
+- Evaluation currently performs expected-keyword coverage checks. It is not a formal RAGAS or DeepEval benchmark.
+- Lexical evidence matching does not independently establish factual correctness.
+- Scanned PDFs may require OCR.
+- Local ChromaDB and DuckDB storage are not a substitute for production-grade distributed infrastructure.
+- Authentication, role-based access control, centralized monitoring and deployment hardening remain separate production considerations.
+
+## Project Status
+
+NEXUS AI 2.0 is an actively developed portfolio project. Core document processing, RAG, hybrid retrieval, structured-data analytics, web ingestion, reporting and automated tests have been implemented.
+
+Remaining work focuses on end-to-end validation, security review, documentation and deployment preparation.
+
+---
+
+Built as a practical enterprise knowledge intelligence project.

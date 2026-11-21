@@ -1,0 +1,8 @@
+
+# NEXUS AI 2.0 - Development dependencies
+
+-r requirements.txt
+
+# Testing and coverage
+pytest==9.2.0
+pytest-cov==7.1.0
